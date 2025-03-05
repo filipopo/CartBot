@@ -1,11 +1,16 @@
 import csv
 import json
 from re import compile
+from collections import defaultdict
 from textblob import TextBlob
 
 
 def get_sentiments():
-    data = {}
+    data = defaultdict(lambda: {
+        'sentiment': 0,
+        'profanities': 0,
+        'lines': 0
+    })
 
     with open('dataset/words.json') as file:
         swears = json.load(file)
@@ -17,28 +22,23 @@ def get_sentiments():
         next(reader)
 
         for title, _, line in reader:
-            if title not in data:
-                data[title] = {
-                    'Positive': 0,
-                    'Neutral': 0,
-                    'Negative': 0,
-                    'Profanities': 0
-                }
-
             matches = pattern.findall(line.lower())
-            if matches:
-                data[title]['Profanities'] += len(matches)
+            data[title]['profanities'] += len(matches)
 
             # Creates a TextBlob instance with each line, uses NLTK corpora
-            line = TextBlob(line)
+            sentiment = TextBlob(line).sentiment.polarity
+            data[title]['sentiment'] += sentiment
 
-            # Checks the polarity and increases the adequate counter
-            if line.sentiment.polarity > 0.05:
-                data[title]['Positive'] += 1
-            elif line.sentiment.polarity > -0.05:
-                data[title]['Neutral'] += 1
-            else:
-                data[title]['Negative'] += 1
+            data[title]['lines'] += 1
+
+    # Compute average and min/max episode sentiment
+    minimal = 0
+    maximal = 0
+
+    for title, values in data.items():
+        values['sentiment'] = values['sentiment'] / values['lines']
+        minimal = min(values['sentiment'], minimal)
+        maximal = max(values['sentiment'], maximal)
 
     with open('dataset/SouthPark_Sentiments.csv', 'w') as file:
         writer = csv.writer(file)
@@ -46,20 +46,17 @@ def get_sentiments():
         # Write the header row
         writer.writerow([
             'Title',
-            'Positive',
-            'Neutral',
-            'Negative',
+            'Sentiment',
             'Profanities'
         ])
 
-        # Write data rows
-        for title, sentiments in data.items():
+        # Write data rows with normalized sentiment
+        for title, values in data.items():
+            sentiment = (values['sentiment'] - minimal) / (maximal - minimal)
             writer.writerow([
                 title,
-                sentiments['Positive'],
-                sentiments['Neutral'],
-                sentiments['Negative'],
-                sentiments['Profanities']
+                round(sentiment, 2),
+                values['profanities']
             ])
 
 
