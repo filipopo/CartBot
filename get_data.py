@@ -1,8 +1,29 @@
 import csv
 import json
+import requests
+from os import environ
 from re import compile
 from collections import defaultdict
 from textblob import TextBlob
+
+
+def add_runtime():
+    url = 'http://www.omdbapi.com/?apikey={}&i=tt0121955&Season={}&Episode={}'
+    pattern = compile(r'\d+')
+
+    with open('dataset/SouthPark_Episodes.csv') as file:
+        reader = list(csv.DictReader(file))
+        for i, row in enumerate(reader):
+            data = requests.get(url.format(environ['API'], row['Season'], row['Episode']))
+            data = data.json()
+
+            match = pattern.match(data['Runtime'])
+            reader[i]['Runtime'] = match[0] if match else 22
+
+    with open('dataset/SouthPark_Episodes.csv', 'w') as file:
+        writer = csv.DictWriter(file, reader[0].keys())
+        writer.writeheader()
+        writer.writerows(reader)
 
 
 def get_sentiments():
@@ -61,4 +82,7 @@ def get_sentiments():
 
 
 if __name__ == '__main__':
+    if environ.get('API'):
+        add_runtime()
+
     get_sentiments()
